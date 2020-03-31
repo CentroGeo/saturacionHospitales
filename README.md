@@ -103,14 +103,14 @@ from  pandemic.covid_pob_ageb_urbana b) as c
 where c.id_pob = pandemic.covid_pob_ageb_urbana.tid
 ``` 
 ``` sql
-CREATE TABLE pancemic.regiones_agebs AS 
+CREATE TABLE pandemic.regiones_agebs AS 
 SELECT b.the_geom, a.*
 FROM
 (SELECT DISTINCT ON (start_vid)
        start_vid, end_vid, agg_cost
 FROM   (SELECT * FROM pgr_dijkstraCost(
-    'select gid as id, source, target, timetravel as cost from network.ways',
-    array(select distinct(id) from pandemic.covid_pob_ageb_urbana), --destino 
+    'select gid::int as id, source, target, timetravel as cost from network.ways',
+    array(select distinct(tid::bigint) from pandemic.covid_pob_ageb_urbana), --destino 
 	array(select distinct(closest_node) from pandemic.cluster_centroid), --origen
 directed:=false)
 ) as sub
@@ -120,11 +120,16 @@ ON a.start_vid = b.id
 ```
 * Generar polígonos por grupo de puntos asignados a caga centroide
 ``` sql
-create table pancemic.regiones_agebs_pol as
-SELECT d.centroid_node as centroid_region,
+create table pandemic.regiones_agebs_pol as
+SELECT d.end_vid as centroid_region,
 	ST_ConvexHull(ST_Collect(d.the_geom)) As the_geom
-	FROM pandemic.regiones_5clust_ As d
-	GROUP BY d.centroid_node;  
+	FROM pandemic.regiones_agebs As d
+	GROUP BY d.end_vid;
+
+ ALTER TABLE pandemic.regiones_agebs_pol
+    ALTER COLUMN the_geom
+    TYPE Geometry(polygon, 32614)
+    USING ST_Transform(the_geom, 32614);
 ```
 * Cambiar los id's de las regiones
 ``` sql
