@@ -149,10 +149,10 @@ Se tomaron como base las estadísticas de infección por COVID-19 de Nueva York,
     15 a 49 años | 46%
     45 a 69 años | 33%
     desconocido  | 9%
-  
-  __Número total de infectados:__ 786 228
-  __Número total de recuperados:__ 166 041 (%22)
-  __Número total de muertes:__ 37 820 (5%)
+
+* __Número total de infectados:__ 786 228
+* __Número total de recuperados:__ 166 041 (%22)
+* __Número total de muertes:__ 37 820 (5%)
 
 * FILTADO DE LOS DATOS DEL CENSO 2010 CON BASE EN LOS RANGOS DE EDAD ESTABLECIDOS Y ASIGANACIÓN DEL ID DE LA REGIÓN A LA QUE PERTENECE
 ```sql
@@ -161,14 +161,31 @@ ALTER TABLE pandemic.covid_pob_ageb_urbana add column pobVul_50mayor60 int4;
 update pandemic.covid_pob_ageb_urbana set pobVul_50mayor60 = pob_50a59 + pob_masd60
 
 ---Agregar el id de region a los datos de AGEBS 
+ALTER TABLE pandemic.covid_pob_ageb_urbana ADD COLUMN id_region int;
 update pandemic.covid_pob_ageb_urbana ps 
+set id_region = nb.id_region
+from pandemic.#REGION_AQUI# nb 
+where st_intersects(nb.the_geom, ps.geom);
+
+---Agregar id de región a los hospitales 
+ALTER TABLE pandemic.infraestructura ADD COLUMN id_region INT;
+update pandemic.infraestructura ps 
 set id_region = nb.id_region
 from pandemic.#REGION_AQUI# nb 
 where st_intersects(nb.the_geom, ps.geom);
 
 -- Tabla de datos agregados por región
 CREATE TABLE pandemic.covid_pobvul_regiones AS
-SELECT a.the_geom, pob.*
+SELECT a.*, b.total_camas, b.hospitales, b.respiradores  
+FROM
+    (Select id_region, sum(camas_covid) as total_camas, 
+    count(*)  as hospitales,
+    sum(ventiladores_covid) as respiradores
+FROM pandemic.infraestructura 
+WHERE region is not null 
+GROUP BY id_region) AS b
+JOIN 
+(SELECT a.the_geom, pob.*
 FROM
 (Select id_region, sum(poblacion_total) as pob_total, 
 sum(pobvul_50mayor60) as pobvul_50mayor60,
@@ -179,7 +196,8 @@ from pandemic.covid_pob_ageb_urbana
 where id_region is not null 
 group by id_region) AS pob
 JOIN pandemic.centroid_region a 
-ON pob.id_region = a.id_region; 
+ON pob.id_region = a.id_region) a
+ON a.id_region = b.id_region 
 
 ---Población infectada por rangos de edad
 ALTER TABLE pandemic.covid_pobvul_regiones ADD COLUMN pobinf_50mayor60 INT; 
@@ -203,11 +221,6 @@ UPDATE pandemic.covid_pobvul_regiones SET total_muertos = total_infectados*0.05;
 UPDATE pandemic.covid_pobvul_regiones SET total_recuperados = total_infectados*0.21;
 ``` 
 
----Agregar el id de region a los datos de AGEBS 
-update pandemic.covid_pob_ageb_urbana ps 
-set id_region = nb.id_region
-from pandemic.#REGION_AQUI# nb 
-where st_intersects(nb.the_geom, ps.geom);
 
 
 
